@@ -22,3 +22,6 @@ Telegram bot for booking lab tests.
 
 ## Author
 Thulasi - QuanHack Internship
+## Architecture Diagram
+
+![Architecture](architecture.png)

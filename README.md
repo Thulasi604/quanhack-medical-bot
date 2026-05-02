@@ -24,4 +24,4 @@ Telegram bot for booking lab tests.
 Thulasi - QuanHack Internship
 ## Architecture Diagram
 
-![Architecture](architecture.png)png
+![Architecture](architecture.png.png)

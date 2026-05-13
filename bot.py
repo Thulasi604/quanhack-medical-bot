@@ -8,7 +8,7 @@ import re
 import threading
 import time
 
-# Load API keys from .env file (safe - not exposed in code)
+# Load API keys from .env
 load_dotenv()
 
 # Get keys from environment variables
@@ -93,7 +93,7 @@ async def handle_message(update, context):
             f"Thank you for choosing our lab!"
         )
         
-        # Schedule reminder (30 seconds later for demo)
+        # Schedule reminder 
         schedule_reminder(user_id, b['test'], b['date'], b['time'])
         
         del pending[user_id]

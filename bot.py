@@ -1,36 +1,44 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
+from dotenv import load_dotenv
+import os
 import json
 import re
-import datetime
 import threading
 import time
 
-# My keys
-TELEGRAM_TOKEN = "8763947687:AAETVPi6d2QBfBRPfuF1Y4T-IQ7jEcFJt_4"
+# Load API keys from .env file (safe - not exposed in code)
+load_dotenv()
 
+# Get keys from environment variables
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Connect to Groq
+# Connect to Groq AI
 client = Groq(api_key=GROQ_API_KEY)
 
-# Store pending bookings and confirmed bookings
+# Store pending bookings before confirmation
 pending = {}
+
+# Store confirmed bookings
 confirmed_bookings = []
-reminder_sent = set()
 
 async def send_reminder(user_id, test, date, time):
-    """Send reminder 24 hours before test"""
-    await application.bot.send_message(
-        chat_id=user_id,
-        text=f"🔔 REMINDER\n\nYour {test} test is scheduled for {date} at {time}.\n\nPlease arrive 15 minutes early."
-    )
+    """Send reminder to user"""
+    try:
+        app = Application.builder().token(TELEGRAM_TOKEN).build()
+        await app.bot.send_message(
+            chat_id=user_id,
+            text=f"🔔 REMINDER\n\nYour {test} test is scheduled for {date} at {time}.\n\nPlease arrive 15 minutes early."
+        )
+    except Exception as e:
+        print(f"Reminder error: {e}")
 
 def schedule_reminder(user_id, test, date, time):
-    """Schedule a reminder (simplified for demo)"""
-    # In real app, calculate actual time. For demo, send after 30 seconds
+    """Schedule reminder in background thread"""
     def reminder_job():
-        time.sleep(30)  # Wait 30 seconds for demo
+        time.sleep(30)  # 30 seconds for demo
         import asyncio
         asyncio.run(send_reminder(user_id, test, date, time))
     
@@ -39,21 +47,25 @@ def schedule_reminder(user_id, test, date, time):
 
 async def start(update, context):
     await update.message.reply_text(
-         "🏥 *Lab Booking Assistant*\n\n"
+        "🏥 *Lab Booking Assistant*\n\n"
         "Just tell me what test you need.\n\n"
         "*Examples:*\n"
         "• 'I need a sugar test tomorrow at 10am'\n"
         "• 'Book blood test for Friday 2pm'\n\n"
-        "I'll book it and send you a reminder.",
+        "I'll book it and send you a reminder.\n\n"
+        "*Commands:*\n"
+        "/report - Check your report status",
+        parse_mode='Markdown'
     )
 
-async def report_ready(update, context):
-    """Manual command to send report ready notification"""
-    user_id = update.effective_user.id
+async def report_command(update, context):
+    """Send report ready notification"""
     await update.message.reply_text(
-        "📄 Your lab report is ready!\n\n"
-        "You can download it from our portal or visit the lab.\n\n"
-        "Thank you for choosing our services."
+        "📄 *Report Update*\n\n"
+        "Your lab report is being processed.\n"
+        "You will be notified when it's ready.\n\n"
+        "For urgent inquiries, please contact the lab directly.",
+        parse_mode='Markdown'
     )
 
 async def handle_message(update, context):
@@ -78,21 +90,16 @@ async def handle_message(update, context):
             f"Date: {b['date']}\n"
             f"Time: {b['time']}\n\n"
             f"🔔 I will send you a reminder before your test.\n\n"
-            f"Thank you!"
+            f"Thank you for choosing our lab!"
         )
         
-        # Schedule reminder (in demo, sends after 30 seconds)
+        # Schedule reminder (30 seconds later for demo)
         schedule_reminder(user_id, b['test'], b['date'], b['time'])
         
         del pending[user_id]
         return
     
-    # Handle REPORT command
-    if user_msg.upper() == '/REPORT':
-        await report_ready(update, context)
-        return
-    
-    # Pure AI - No fallback
+    # AI prompt to extract test, date, time
     prompt = f'Extract test, date, time from: "{user_msg}". Return ONLY JSON: {{"test":"","date":"","time":""}}'
     
     response = client.chat.completions.create(
@@ -101,7 +108,7 @@ async def handle_message(update, context):
         temperature=0
     )
     
-    # Clean and parse JSON
+    # Clean and parse JSON response
     result = response.choices[0].message.content
     result = re.sub(r'```json\s*', '', result)
     result = re.sub(r'```\s*', '', result)
@@ -109,6 +116,7 @@ async def handle_message(update, context):
     
     data = json.loads(result)
     
+    # Store pending booking
     pending[user_id] = {
         "test": data.get("test", "test"),
         "date": data.get("date", "tomorrow"),
@@ -125,14 +133,16 @@ async def handle_message(update, context):
     )
 
 def main():
-    global application
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("report", report_ready))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    global app
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("report", report_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("AI Medical Bot with Reminders running...")
-    application.run_polling()
+    print("🤖 AI Medical Bot with Reminders is running...")
+    print("✅ Reminders will be sent 30 seconds after booking")
+    print("✅ Type /report to check report status")
+    app.run_polling()
 
 if __name__ == '__main__':
     main()

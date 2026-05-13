@@ -1,12 +1,25 @@
-# Medical Lab Telegram Bot - AI Powered
+# 🏥 MedAssist AI - Medical Lab Booking Bot
 
-Telegram bot that uses **Groq AI** to understand natural language and book lab tests.
+Telegram bot that uses **Groq AI (Llama 3.1)** to understand natural language and book lab tests automatically.
 
-## How it works
-1. Send `/start` to begin
-2. Type naturally: "I need a sugar test tomorrow at 10am"
-3. AI understands and asks for confirmation
-4. Type `CONFIRM` to complete booking
-5. Bot sends reminder before your test
+---
 
-## Example
+## 📌 Problem Solved
+
+Medical labs receive many phone calls for bookings. Staff spend hours writing down test details manually. This bot automates the entire process.
+
+---
+
+## 🚀 Features
+
+| Feature | Description |
+|---------|-------------|
+| 🤖 Natural Language Understanding | Type "I need a sugar test tomorrow at 10am" - AI understands |
+| 📋 Any Test Type | Works for sugar, blood, cholesterol, urine, thyroid, COVID, etc. |
+| ✅ Booking Confirmation | Asks for CONFIRM before finalizing |
+| 🔔 Reminders | Sends automatic reminder before test |
+| 📄 Report Status | Type /report to check report status |
+
+---
+
+## 🏗️ Architecture (Input → Process → Output)

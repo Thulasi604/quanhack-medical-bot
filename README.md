@@ -23,4 +23,4 @@ Medical labs receive many phone calls for bookings. Staff spend hours writing do
 ---
 
 ## 🏗️ Architecture (Input → Process → Output)
-![Architecture Diagram](architecture.png)
+![Architecture Diagram](Architecture.png)

@@ -1,83 +1,138 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from groq import Groq
+import json
+import re
+import datetime
+import threading
+import time
 
-
+# My keys
 TELEGRAM_TOKEN = "8763947687:AAETVPi6d2QBfBRPfuF1Y4T-IQ7jEcFJt_4"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🏥 *Welcome to Medical Lab Assistant!*\n\n"
-        "I can help you book lab tests.\n\n"
-        "*Commands:*\n"
-        "/start - Start the bot\n"
-        "/book - Book a lab test\n\n"
-        "Type /book to get started!",
-        parse_mode='Markdown'
+
+# Connect to Groq
+client = Groq(api_key=GROQ_API_KEY)
+
+# Store pending bookings and confirmed bookings
+pending = {}
+confirmed_bookings = []
+reminder_sent = set()
+
+async def send_reminder(user_id, test, date, time):
+    """Send reminder 24 hours before test"""
+    await application.bot.send_message(
+        chat_id=user_id,
+        text=f"🔔 REMINDER\n\nYour {test} test is scheduled for {date} at {time}.\n\nPlease arrive 15 minutes early."
     )
 
-async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📋 *Book Your Test*\n\n"
-        "Please send:\n"
-        "1️⃣ Test type (blood, urine, xray)\n"
-        "2️⃣ Date (tomorrow, May 10th)\n"
-        "3️⃣ Time (10am, 2pm)\n\n"
-        "*Example:* blood test, tomorrow, 10am",
-        parse_mode='Markdown'
-    )
-    context.user_data['awaiting_booking'] = True
+def schedule_reminder(user_id, test, date, time):
+    """Schedule a reminder (simplified for demo)"""
+    # In real app, calculate actual time. For demo, send after 30 seconds
+    def reminder_job():
+        time.sleep(30)  # Wait 30 seconds for demo
+        import asyncio
+        asyncio.run(send_reminder(user_id, test, date, time))
+    
+    thread = threading.Thread(target=reminder_job)
+    thread.start()
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text.lower()
+async def start(update, context):
+    await update.message.reply_text(
+         "🏥 *Lab Booking Assistant*\n\n"
+        "Just tell me what test you need.\n\n"
+        "*Examples:*\n"
+        "• 'I need a sugar test tomorrow at 10am'\n"
+        "• 'Book blood test for Friday 2pm'\n\n"
+        "I'll book it and send you a reminder.",
+    )
+
+async def report_ready(update, context):
+    """Manual command to send report ready notification"""
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        "📄 Your lab report is ready!\n\n"
+        "You can download it from our portal or visit the lab.\n\n"
+        "Thank you for choosing our services."
+    )
+
+async def handle_message(update, context):
+    user_msg = update.message.text
+    user_id = update.effective_user.id
     
-    if context.user_data.get('awaiting_booking'):
-        parts = user_message.split(',')
-        if len(parts) >= 3:
-            test_type = parts[0].strip()
-            date = parts[1].strip()
-            time = parts[2].strip()
-            
-            await update.message.reply_text(
-                f"✅ *Booking Details:*\n\n"
-                f"Test: {test_type}\n"
-                f"Date: {date}\n"
-                f"Time: {time}\n\n"
-                f"Reply with *CONFIRM* to book.",
-                parse_mode='Markdown'
-            )
-            context.user_data['booking'] = {'test': test_type, 'date': date, 'time': time}
-            context.user_data['awaiting_confirm'] = True
-            context.user_data['awaiting_booking'] = False
-        else:
-            await update.message.reply_text(
-                "Please use format: test type, date, time\n"
-                "Example: blood test, tomorrow, 10am"
-            )
-    
-    elif context.user_data.get('awaiting_confirm') and user_message == 'confirm':
-        booking = context.user_data.get('booking', {})
+    # Handle CONFIRM
+    if user_msg.upper() == 'CONFIRM' and user_id in pending:
+        b = pending[user_id]
+        
+        # Save to confirmed bookings
+        confirmed_bookings.append({
+            "user_id": user_id,
+            "test": b['test'],
+            "date": b['date'],
+            "time": b['time']
+        })
+        
         await update.message.reply_text(
-            f"✅ *Booking Confirmed!*\n\n"
-            f"Your {booking.get('test', 'test')} is booked for {booking.get('date', '')} at {booking.get('time', '')}.\n\n"
-            f"You'll receive a reminder before your test.\n\n"
-            f"Thank you for choosing our lab!",
-            parse_mode='Markdown'
+            f"✅ Confirmed!\n\n"
+            f"Test: {b['test']}\n"
+            f"Date: {b['date']}\n"
+            f"Time: {b['time']}\n\n"
+            f"🔔 I will send you a reminder before your test.\n\n"
+            f"Thank you!"
         )
-        context.user_data.clear()
+        
+        # Schedule reminder (in demo, sends after 30 seconds)
+        schedule_reminder(user_id, b['test'], b['date'], b['time'])
+        
+        del pending[user_id]
+        return
     
-    else:
-        await update.message.reply_text(
-            "Type /start to begin or /book to book a test"
-        )
+    # Handle REPORT command
+    if user_msg.upper() == '/REPORT':
+        await report_ready(update, context)
+        return
+    
+    # Pure AI - No fallback
+    prompt = f'Extract test, date, time from: "{user_msg}". Return ONLY JSON: {{"test":"","date":"","time":""}}'
+    
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    
+    # Clean and parse JSON
+    result = response.choices[0].message.content
+    result = re.sub(r'```json\s*', '', result)
+    result = re.sub(r'```\s*', '', result)
+    result = result.strip()
+    
+    data = json.loads(result)
+    
+    pending[user_id] = {
+        "test": data.get("test", "test"),
+        "date": data.get("date", "tomorrow"),
+        "time": data.get("time", "10am")
+    }
+    
+    await update.message.reply_text(
+        f"AI understood:\n\n"
+        f"Test: {pending[user_id]['test']}\n"
+        f"Date: {pending[user_id]['date']}\n"
+        f"Time: {pending[user_id]['time']}\n\n"
+        f"Reply CONFIRM to book.\n\n"
+        f"I will send you a reminder before your test!"
+    )
 
 def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("book", book_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    global application
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("report", report_ready))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("🤖 Medical Bot is running... Press Ctrl+C to stop")
-    app.run_polling()
+    print("AI Medical Bot with Reminders running...")
+    application.run_polling()
 
 if __name__ == '__main__':
     main()

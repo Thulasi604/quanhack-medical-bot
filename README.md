@@ -1,27 +1,12 @@
-# Medical Lab Telegram Bot
+# Medical Lab Telegram Bot - AI Powered
 
-Telegram bot for booking lab tests.
+Telegram bot that uses **Groq AI** to understand natural language and book lab tests.
 
-## How to use
-1. Send `/start`
-2. Send `/book`  
-3. Type: `blood test, tomorrow, 10am`
-4. Type: `CONFIRM`
+## How it works
+1. Send `/start` to begin
+2. Type naturally: "I need a sugar test tomorrow at 10am"
+3. AI understands and asks for confirmation
+4. Type `CONFIRM` to complete booking
+5. Bot sends reminder before your test
 
 ## Example
-- User: /book
-- Bot: Please send test type, date, time
-- User: blood test, tomorrow, 10am
-- Bot: Reply CONFIRM to book
-- User: CONFIRM
-- Bot: ✅ Booking confirmed!
-
-## Tech
-- Python
-- Telegram Bot API
-
-## Author
-Thulasi - QuanHack Internship
-## Architecture Diagram
-
-![Architecture](architecture.png.png)
